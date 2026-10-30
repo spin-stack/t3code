@@ -1,0 +1,74 @@
+# Spinbox's build of T3 Code's web client. The fork deploys one thing: the client built from the
+# `spin` branch (an upstream release tag with the spin/* branches stacked on it), published as a
+# release of this fork with the same layout as the client/ directory of upstream's CLI archive.
+# The server is upstream's release as it is; Spinbox pins both by hash.
+#
+# A tag v<upstream version>-spin.<n> on `spin` builds and publishes that release.
+name: spin-client
+
+on:
+  push:
+    tags:
+      - "v*-spin.*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: spin-client-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: package.json
+
+      # The image's Node no longer ships corepack; the version is the one packageManager names.
+      - name: Install pnpm
+        run: npm install -g "pnpm@$(node -p 'require("./package.json").packageManager.split("@")[1]')"
+
+      # The client and the script that brands it, nothing else of the monorepo.
+      - name: Install
+        run: pnpm install --frozen-lockfile --filter "@t3tools/web..." --filter "@t3tools/scripts..."
+
+      - name: Build
+        run: |
+          pnpm --filter @t3tools/web build
+          node scripts/apply-web-brand-assets.ts production apps/web/dist
+          rm -rf apps/web/dist/.vite
+          find apps/web/dist -name '*.map' -delete
+
+      - name: Package
+        id: package
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          version="${REF_NAME#v}"
+          name="t3-client-${version}"
+          mkdir -p "out/${name}"
+          cp -a apps/web/dist "out/${name}/client"
+          tar -C out -czf "${name}.tar.gz" "${name}"
+          sha256sum "${name}.tar.gz" | tee "${name}.tar.gz.sha256"
+          echo "name=${name}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF_NAME: ${{ github.ref_name }}
+          NAME: ${{ steps.package.outputs.name }}
+        run: |
+          gh release create "${REF_NAME}" "${NAME}.tar.gz" "${NAME}.tar.gz.sha256" \
+            --repo "${GITHUB_REPOSITORY}" --title "${REF_NAME}" --verify-tag \
+            --notes "T3 Code's web client built from ${GITHUB_SHA} on the spin branch."
