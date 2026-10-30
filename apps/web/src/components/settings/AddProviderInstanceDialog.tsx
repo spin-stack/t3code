@@ -32,6 +32,7 @@ import { Input } from "../ui/input";
 import { RadioGroup } from "../ui/radio-group";
 import { toastManager } from "../ui/toast";
 import { providerClients } from "./providerDriverMeta";
+import { isSpinProvider } from "../../spin/providers";
 import { ProviderAccentColorPicker } from "./ProviderAccentColorPicker";
 import { SettingsGroup } from "./SettingsGroup";
 import { SettingsRow } from "./settingsLayout";
@@ -76,7 +77,7 @@ const DEFAULT_DRIVER_KIND = ProviderDriverKind.make("codex");
 const ACP_REGISTRY_DRIVER_KIND = ProviderDriverKind.make("acpRegistry");
 const DEFAULT_DRIVER_OPTION = providerClients.definitions[0]!;
 const DRIVER_OPTIONS = providerClients.definitions.filter(
-  (option) => option.driverKind !== ACP_REGISTRY_DRIVER_KIND,
+  (option) => option.driverKind !== ACP_REGISTRY_DRIVER_KIND && isSpinProvider(option),
 );
 const FEATURED_DRIVER_OPTIONS = DRIVER_OPTIONS.filter((option) => option.featured !== false);
 const MORE_DRIVER_OPTIONS = DRIVER_OPTIONS.filter((option) => option.featured === false);
