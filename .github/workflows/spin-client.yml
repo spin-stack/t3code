@@ -26,9 +26,17 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
+      # A clone of the one commit rather than actions/checkout: .repos/ holds gitlinks with no
+      # .gitmodules entry, and checkout walks submodules even outside a sparse checkout. The fork
+      # is public, so the clone needs no credential.
+      - name: Check out
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          git init -q .
+          git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+          git fetch -q --depth 1 origin "${SHA}"
+          git -c advice.detachedHead=false checkout -q FETCH_HEAD
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
