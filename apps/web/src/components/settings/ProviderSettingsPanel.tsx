@@ -1,4 +1,5 @@
 import { SettingsGroup } from "./SettingsGroup";
+import { SHOW_PROVIDER_LOGIN } from "../../spin/providerLogin";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
 import {
   AuthSettingsWriteScope,
@@ -1288,7 +1289,9 @@ function ProviderInstanceRow({
       acpProjects={acpProjects}
       projectOverride={projectOverride}
       onAcceptUrlAuth={
-        readOnly ? undefined : (action) => actions.acceptUrlAuthentication(instanceId, action)
+        readOnly || !SHOW_PROVIDER_LOGIN
+          ? undefined
+          : (action) => actions.acceptUrlAuthentication(instanceId, action)
       }
       instanceId={instanceId}
       instance={instance}
@@ -1309,7 +1312,7 @@ function ProviderInstanceRow({
       }
       canWriteSettings={canWriteSettings}
       setup={
-        mode === "editor" && driver === "antigravity" ? (
+        !SHOW_PROVIDER_LOGIN ? undefined : mode === "editor" && driver === "antigravity" ? (
           <ProviderSetupSection
             environmentId={environmentId}
             environmentLabel={environmentLabel}
