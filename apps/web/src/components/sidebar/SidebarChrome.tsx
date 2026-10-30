@@ -30,6 +30,7 @@ import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
 import { observeResize } from "~/lib/observeResize";
+import { isHiddenPath, SHOW_UPDATE_NOTICES } from "~/spin/hidden";
 
 export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   isElectron,
@@ -209,22 +210,24 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
             label="Settings"
             onClick={handleSettingsClick}
           />
-          {pullRequestsSupported ? (
+          {pullRequestsSupported && !isHiddenPath("/pull-requests") ? (
             <SidebarUtilityItem
               icon={<PullRequestGlyph.pullRequest />}
               label="Pull requests"
               onClick={handlePullRequestsClick}
             />
           ) : null}
-          <SidebarUtilityItem
-            icon={<ChartNoAxesColumnIcon />}
-            label="Usage"
-            onClick={handleUsageClick}
-          />
+          {isHiddenPath("/usage") ? null : (
+            <SidebarUtilityItem
+              icon={<ChartNoAxesColumnIcon />}
+              label="Usage"
+              onClick={handleUsageClick}
+            />
+          )}
         </>
       )}
       <SidebarThreadUndoNotice />
-      <SidebarUpdatePill />
+      {SHOW_UPDATE_NOTICES ? <SidebarUpdatePill /> : null}
     </SidebarMenu>
   );
 });
@@ -232,8 +235,8 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
 export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
   return (
     <SidebarFooter>
-      <SidebarProviderUpdatePill />
-      <SidebarUpdateArchitectureWarning />
+      {SHOW_UPDATE_NOTICES ? <SidebarProviderUpdatePill /> : null}
+      {SHOW_UPDATE_NOTICES ? <SidebarUpdateArchitectureWarning /> : null}
       <SidebarUtilityMenu />
     </SidebarFooter>
   );

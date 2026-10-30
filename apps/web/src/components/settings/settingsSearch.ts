@@ -14,6 +14,7 @@ import { TYPOGRAPHY_ADVANCED_STORAGE_KEY } from "../../appearanceFonts";
 import { writeLocalStorageValue } from "../../hooks/useLocalStorage";
 import { commandLabel } from "./KeybindingsSettings.logic";
 import type { ResolvedSettingsScope } from "./settingsScope";
+import { visibleNavGroups, visibleSearchItems } from "../../spin/hidden";
 
 export type SettingsPath =
   | "/settings/projects"
@@ -111,7 +112,7 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
 export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
   readonly heading: string | null;
   readonly paths: ReadonlyArray<SettingsPath>;
-}> = [
+}> = visibleNavGroups([
   {
     heading: null,
     paths: [
@@ -142,7 +143,7 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
     heading: null,
     paths: ["/settings/maintenance", "/settings/labs", "/settings/about", "/settings/archived"],
   },
-];
+]);
 
 export function keybindingSearchAnchorId<Command extends KeybindingCommand>(command: Command) {
   return `keybinding-${command}` as const;
@@ -1326,7 +1327,7 @@ export function searchSettings(
   if (normalizedQuery.length === 0) return [];
   const queryTokens = normalizedQuery.split(" ");
 
-  return settingsForThisPlatform(items)
+  return settingsForThisPlatform(visibleSearchItems(items))
     .flatMap((item, index) => {
       const title = normalizeSearchText(item.title);
       const fields = [
