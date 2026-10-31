@@ -19,4 +19,6 @@ Spinbox's is a stack of small branches on an upstream release tag:
 ## Following upstream
 
 Rebase each `patch/*` branch onto the new upstream tag, then release as above. A branch that no
-longer rebases names the change that broke.
+longer rebases names the change that broke. One that rebases can still have stopped working: a
+page or action upstream renamed shows again under its new name. The push of `spin` runs the
+patches' tests (`apps/web/src/spin/*.test.ts`), which fail on what upstream no longer names.
