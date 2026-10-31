@@ -73,6 +73,7 @@ import {
   getProviderSummary,
   getProviderVersionLabel,
 } from "./providerStatus";
+import { SHOW_UPDATE_NOTICES } from "../../spin/hidden";
 
 const ENVIRONMENT_VARIABLE_NAME_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
@@ -644,11 +645,13 @@ export function ProviderInstanceCard({
       ? (liveProvider.auth.label ?? liveProvider.auth.type ?? null)
       : null;
   const versionLabel = getProviderVersionLabel(liveProvider?.version);
-  const versionAdvisory = getProviderVersionAdvisoryPresentation(
-    liveProvider?.versionAdvisory,
-    liveProvider?.compatibilityAdvisory,
-    enabled,
-  );
+  const versionAdvisory = SHOW_UPDATE_NOTICES
+    ? getProviderVersionAdvisoryPresentation(
+        liveProvider?.versionAdvisory,
+        liveProvider?.compatibilityAdvisory,
+        enabled,
+      )
+    : null;
   const updateCommand = versionAdvisory?.updateCommand ?? null;
   const updateState = liveProvider?.updateState;
   const updateProgress = isUpdating
