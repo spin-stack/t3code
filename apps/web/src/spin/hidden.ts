@@ -26,7 +26,7 @@ export function visibleNavGroups<
 }
 
 /** Pages Spinbox hides besides settings: a link to one lands on the app's start instead. */
-const HIDDEN_PATHS: ReadonlySet<string> = new Set([
+export const HIDDEN_PATHS: ReadonlySet<string> = new Set([
   "/pull-requests",
   "/usage",
   "/connect",
@@ -49,7 +49,7 @@ export function visibleSearchItems<I extends { readonly to: string }>(
 }
 
 /** Command palette actions Spinbox hides: they lead to hidden pages or features. */
-const HIDDEN_PALETTE_ACTIONS: ReadonlySet<string> = new Set([
+export const HIDDEN_PALETTE_ACTIONS: ReadonlySet<string> = new Set([
   "action:pull-requests",
   "action:open-thread-pull-requests",
   "action:link-pull-request",
