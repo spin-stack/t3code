@@ -3,11 +3,14 @@
 # release of this fork with the same layout as the client/ directory of upstream's CLI archive.
 # The server is upstream's release as it is; Spinbox pins both by hash.
 #
-# A tag v<upstream version>-spin.<n> on `spin` builds and publishes that release.
+# A tag v<upstream version>-spin.<n> on `spin` builds and publishes that release. A push of `spin` -
+# the stack rebuilt, on a new tag or with a patch changed - tests and builds it, and publishes nothing.
 name: spin-client
 
 on:
   push:
+    branches:
+      - spin
     tags:
       - "v*-spin.*"
   workflow_dispatch:
@@ -49,6 +52,12 @@ jobs:
       # The client and the script that brands it, nothing else of the monorepo.
       - name: Install
         run: pnpm install --frozen-lockfile --filter "@t3tools/web..." --filter "@t3tools/scripts..."
+
+      # The patches' own tests: among them, that what they hide is still named upstream - a rename
+      # upstream merges cleanly and shows the renamed thing again. Upstream's tests are upstream's.
+      - name: Test the patches
+        working-directory: apps/web
+        run: pnpm exec vp test run --project unit src/spin
 
       - name: Build
         run: |
