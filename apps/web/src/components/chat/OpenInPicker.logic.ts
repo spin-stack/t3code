@@ -1,6 +1,7 @@
 import type { EnvironmentId } from "@t3tools/contracts";
 
 import type { RemoteOpenMode } from "../../remoteOpen";
+import { SHOW_OPEN_IN } from "../../spin/openIn";
 
 export function shouldShowOpenInPicker(input: {
   readonly activeProjectName: string | undefined;
@@ -8,7 +9,7 @@ export function shouldShowOpenInPicker(input: {
   readonly primaryEnvironmentId: EnvironmentId | null;
   readonly remoteOpenMode: RemoteOpenMode;
 }): boolean {
-  if (!input.activeProjectName) return false;
+  if (!SHOW_OPEN_IN || !input.activeProjectName) return false;
   if (
     input.primaryEnvironmentId !== null &&
     input.activeThreadEnvironmentId === input.primaryEnvironmentId
