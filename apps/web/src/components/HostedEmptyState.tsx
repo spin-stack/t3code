@@ -9,6 +9,7 @@ import { hasCloudPublicConfig } from "~/cloud/publicConfig";
 import { isElectron } from "../env";
 import { isLocalEnvironmentDisabled } from "../localEnvironment";
 import { useRelayEnvironmentDiscovery } from "../state/environments";
+import { SPINBOX_WITHOUT_PRIMARY } from "../spin/noPrimary";
 import { InstallT3Commands } from "./InstallT3Commands";
 import { retryClerkLoad, useClerkLoadFailed } from "./clerk/clerkLoadFailure";
 import { useT3ConnectAuthPrompt } from "./clerk/useT3ConnectAuthPrompt";
@@ -34,31 +35,42 @@ export function HostedEmptyState() {
           </div>
         </WorkspacePageHeader>
 
-        <Empty className="flex-1">
-          <EmptyHeader>
-            <EmptyTitle>
-              {localEnvironmentOff ? "This computer is off" : "No computer connected"}
-            </EmptyTitle>
-            <EmptyDescription>
-              {localEnvironmentOff
-                ? "Turn it back on, or connect a different computer."
-                : cloudEnabled
-                  ? "Your agents run on your computer."
-                  : "Your agents run on your computer. Start T3 Code there first."}
-            </EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>
-            {localEnvironmentOff ? (
-              <Button render={<Link to="/settings/connections" />} size="sm">
-                Open Environments
-              </Button>
-            ) : (
-              <ol className="w-full space-y-4 text-left">
-                {cloudEnabled ? <T3ConnectSteps /> : <PairingSteps />}
-              </ol>
-            )}
-          </EmptyContent>
-        </Empty>
+        {SPINBOX_WITHOUT_PRIMARY ? (
+          <Empty className="flex-1">
+            <EmptyHeader>
+              <EmptyTitle>No chat open</EmptyTitle>
+              <EmptyDescription>
+                Open a chat from the list, or start a new thread in one of your projects.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        ) : (
+          <Empty className="flex-1">
+            <EmptyHeader>
+              <EmptyTitle>
+                {localEnvironmentOff ? "This computer is off" : "No computer connected"}
+              </EmptyTitle>
+              <EmptyDescription>
+                {localEnvironmentOff
+                  ? "Turn it back on, or connect a different computer."
+                  : cloudEnabled
+                    ? "Your agents run on your computer."
+                    : "Your agents run on your computer. Start T3 Code there first."}
+              </EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              {localEnvironmentOff ? (
+                <Button render={<Link to="/settings/connections" />} size="sm">
+                  Open Environments
+                </Button>
+              ) : (
+                <ol className="w-full space-y-4 text-left">
+                  {cloudEnabled ? <T3ConnectSteps /> : <PairingSteps />}
+                </ol>
+              )}
+            </EmptyContent>
+          </Empty>
+        )}
       </div>
     </SidebarInset>
   );
