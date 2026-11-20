@@ -9,7 +9,7 @@
 # rerere on, git replays the resolution next time.
 set -eu
 base=${1:?usage: stack.sh <upstream tag>}
-patches="workflows trim-nav no-welcome no-open-in only-claude-codex provider-login spinbox-environments spinbox-new-thread spinbox-thread-list spinbox-thread-cache"
+patches="workflows trim-nav no-welcome no-open-in only-claude-codex provider-login spinbox-environments spinbox-new-thread spinbox-thread-list spinbox-thread-cache spinbox-no-primary"
 
 git config rerere.enabled true
 git switch -C spin "$base"
