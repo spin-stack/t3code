@@ -270,6 +270,11 @@ import { resolveShortcutCommand, threadJumpIndexFromCommand } from "../keybindin
 import { CommandDialog, CommandDialogPopup, CommandFooterAction } from "./ui/command";
 import { Button } from "./ui/button";
 import { stackedThreadToast, toastManager } from "./ui/toast";
+import {
+  buildSpinboxProjectItems,
+  useSpinboxProjects,
+  useStartSpinboxThread,
+} from "../spin/projects";
 import { suggestAppAccessForRemote } from "./sourceControlAppAccessToast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { ComposerHandleContext, useComposerHandleContext } from "../composerHandleContext";
@@ -842,6 +847,9 @@ function OpenCommandPaletteDialog(props: {
     await handleNewThread(scopeProjectRef(project.environmentId, project.id));
   };
 
+  const spinboxProjects = useSpinboxProjects();
+  const startSpinboxThread = useStartSpinboxThread();
+
   // Pinning from a row keeps rows in place while the palette is open.
   const projectSearchItems = useOrderWhileOpen(
     buildProjectSearchItems({
@@ -887,6 +895,18 @@ function OpenCommandPaletteDialog(props: {
           );
         },
       });
+      // Spinbox's projects, beside the ones T3 has: its workspace ensured, then paired.
+      projectItems.push(
+        ...buildSpinboxProjectItems(spinboxProjects, (id) =>
+          startSpinboxThread(id).catch((error: unknown) => {
+            toastManager.add({
+              type: "error",
+              title: "Could not open the project",
+              description: error instanceof Error ? error.message : String(error),
+            });
+          }),
+        ),
+      );
       if (scratchTargetEnvironmentId === null) return projectItems;
 
       const noProjectIndex = newThreadNoProjectIndex(
