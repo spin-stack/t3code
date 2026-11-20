@@ -18,10 +18,21 @@ export interface SpinboxThread {
 export interface SleepingEnvironment {
   readonly environmentId: string;
   readonly label: string;
+  /** How its workspace is, in a word, and why where it is not ready. */
+  readonly state: string;
+  readonly why?: string;
   readonly threads: ReadonlyArray<SpinboxThread>;
 }
 
 const text = (v: unknown): v is string => typeof v === "string" && v !== "";
+
+/** What a person reads of an environment's state beside its name. */
+const STATE_WORDS: Record<string, string> = {
+  asleep: "Asleep",
+  waking: "Waking",
+  ready: "Ready",
+  failed: "Failed",
+};
 
 /**
  * readSleepingThreads is, from what the page told, each environment with T3's id and chats, its
@@ -43,7 +54,17 @@ export function readSleepingThreads(told: unknown): SleepingEnvironment[] {
         return [{ id: c.id, title: c.title, updatedAt: c.updatedAt }];
       })
       .toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-    return threads.length > 0 ? [{ environmentId: r.environmentId, label: r.label, threads }] : [];
+    if (threads.length === 0) return [];
+    const state = typeof r.state === "string" && STATE_WORDS[r.state] ? r.state : "asleep";
+    return [
+      {
+        environmentId: r.environmentId,
+        label: r.label,
+        state,
+        ...(text(r.why) ? { why: r.why } : {}),
+        threads,
+      },
+    ];
   });
 }
 
@@ -82,7 +103,11 @@ export function SpinboxSleepingThreads() {
           <h3 className="flex items-center gap-1.5 px-2.5 pb-1 text-xs text-sidebar-muted-foreground">
             <MoonIcon aria-hidden className="size-3.5 shrink-0" />
             <span className="truncate">{e.label}</span>
+            <span className="shrink-0">· {STATE_WORDS[e.state]}</span>
           </h3>
+          {e.why ? (
+            <p className="px-2.5 pb-1 text-xs text-sidebar-muted-foreground">{e.why}</p>
+          ) : null}
           <ul>
             {e.threads.map((t) => (
               <li key={t.id} className="list-none">

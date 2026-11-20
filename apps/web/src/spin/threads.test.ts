@@ -29,9 +29,25 @@ describe("the chats Spinbox lists of the environments", () => {
       {
         environmentId: "e1",
         label: "dev",
+        state: "asleep",
         threads: [thread("new", "2026-11-02T00:00:00Z"), thread("old", "2026-11-01T00:00:00Z")],
       },
     ]);
+  });
+
+  it.each([
+    [
+      "its state and why, as told",
+      { state: "failed", why: "Its machine could not boot." },
+      { state: "failed", why: "Its machine could not boot." },
+    ],
+    ["asleep, where the state is none it knows", { state: "melting" }, { state: "asleep" }],
+  ])("says of an environment %s", (_, told, want) => {
+    const [e] = readSleepingThreads([
+      { environmentId: "e1", label: "dev", threads: [thread("a", "t")], ...told },
+    ]);
+    expect(e).toMatchObject(want);
+    expect(e?.why).toBe((want as { why?: string }).why);
   });
 
   it.each([
