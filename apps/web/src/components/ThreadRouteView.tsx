@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 import ChatView from "./ChatView";
 import { BackgroundThreadContext } from "./chat/backgroundThread";
 import { SidebarInset } from "./ui/sidebar";
+import { SpinboxCachedThread, SpinboxThreadCacheWriter } from "../spin/threadCache";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { useSidebarPendingFileDropStore } from "../sidebarPendingFileDropStore";
 import {
@@ -224,12 +225,29 @@ export function ThreadRouteView({
     );
   }
 
+  // Spinbox: a chat of a workspace still waking reads from what this browser kept of it.
+  const spinboxWaking =
+    view === null &&
+    redirect === null &&
+    !background &&
+    renderState !== "missing" &&
+    typeof window !== "undefined" &&
+    typeof window.spinboxPair === "function";
   return (
     <SidebarInset
       className="h-svh min-h-0 overflow-hidden overscroll-y-none md:h-dvh"
       inert={background}
     >
-      <BackgroundThreadContext value={background}>{view}</BackgroundThreadContext>
+      <BackgroundThreadContext value={background}>
+        {spinboxWaking && serverThreadRef ? (
+          <SpinboxCachedThread threadRef={serverThreadRef} />
+        ) : (
+          view
+        )}
+      </BackgroundThreadContext>
+      {serverThreadRef && renderState === "ready" ? (
+        <SpinboxThreadCacheWriter threadRef={serverThreadRef} />
+      ) : null}
       {background ? null : redirect}
     </SidebarInset>
   );
