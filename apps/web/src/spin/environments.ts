@@ -124,9 +124,20 @@ export function pairingInput(environment: SpinboxEnvironment, pairingUrl: string
 const pairing = new Set<string>();
 
 /**
- * SpinboxPairing pairs the environment a chat's address names when this client has not and Spinbox
- * has it: a chat of another workspace, opened by its link, is that workspace chosen. It draws
- * nothing; a pairing refused is left to the address's own "not found".
+ * wantsPairing is whether a chat's address, naming this environment, pairs it: one this client has
+ * not, or one it has whose workspace sleeps. Spinbox wakes a workspace for a pairing and for nothing
+ * else - this client reconnecting to what it saved, on every load and focus, would wake each one it
+ * ever opened - so opening a sleeping one's chat is what pairs it again.
+ */
+export function wantsPairing(wanted: SpinboxEnvironment | undefined, saved: boolean): boolean {
+  if (wanted === undefined) return false;
+  return !saved || wanted.state === "asleep";
+}
+
+/**
+ * SpinboxPairing pairs the environment a chat's address names when wantsPairing says so: a chat of
+ * another workspace, opened by its link, is that workspace chosen, and woken. It draws nothing; a
+ * pairing refused is left to the address's own "not found".
  */
 export function SpinboxPairing({ environmentId }: { environmentId: string | undefined }) {
   const environments = useSpinboxEnvironments();
@@ -138,7 +149,8 @@ export function SpinboxPairing({ environmentId }: { environmentId: string | unde
   const saved = environmentId !== undefined && presentationById.has(environmentId as EnvironmentId);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- a pairing with another workspace's server, started once while this chat's address names it
   useEffect(() => {
-    if (!inSpinbox() || !isReady || saved || !wanted || pairing.has(wanted.workspaceId)) return;
+    if (!inSpinbox() || !isReady || !wanted || !wantsPairing(wanted, saved)) return;
+    if (pairing.has(wanted.workspaceId)) return;
     pairing.add(wanted.workspaceId);
     void pair(wanted).finally(() => pairing.delete(wanted.workspaceId));
   });

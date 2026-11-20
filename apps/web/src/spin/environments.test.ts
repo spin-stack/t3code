@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { pairingInput, readSpinboxEnvironments } from "./environments";
+import { pairingInput, readSpinboxEnvironments, wantsPairing } from "./environments";
 
 const env = {
   workspaceId: "01a1f54c-0b33-7b64-ae5d-36864dcaf9cb",
@@ -55,5 +55,23 @@ describe("what a pairing asks", () => {
   it("expects none before the workspace's server has said it", () => {
     const told = readSpinboxEnvironments([env])[0]!;
     expect(pairingInput(told, url)).toEqual({ pairingUrl: url });
+  });
+});
+
+// Spinbox wakes a workspace only for a pairing, so a chat's address is what pairs one: one this
+// client has not, and one it saved whose workspace has gone to sleep since.
+describe("which environment a chat's address pairs", () => {
+  const told = (state: string) => readSpinboxEnvironments([{ ...env, state }])[0]!;
+  it.each([
+    ["one not saved", "ready", false, true],
+    ["one saved and asleep", "asleep", true, true],
+    ["one saved and running", "ready", true, false],
+    ["one saved and already waking", "waking", true, false],
+  ])("%s", (_, state, saved, pairs) => {
+    expect(wantsPairing(told(state), saved)).toBe(pairs);
+  });
+
+  it("none Spinbox did not tell", () => {
+    expect(wantsPairing(undefined, false)).toBe(false);
   });
 });
