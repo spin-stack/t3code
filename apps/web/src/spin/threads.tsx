@@ -2,7 +2,7 @@
 // threads). Opening one pairs - and so wakes - its workspace (SpinboxPairing).
 import type { EnvironmentId } from "@t3tools/contracts";
 import { MoonIcon } from "lucide-react";
-import { useEffect, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 import { useRouter } from "@tanstack/react-router";
 
 import { useEnvironments } from "../state/environments";
@@ -85,15 +85,12 @@ function subscribe(changed: () => void): () => void {
 
 /**
  * SpinboxSleepingThreads lists the chats of the environments this client has not paired, under each
- * one's name, and tells the page that this client lists every chat itself, so it shows no list of
- * its own beside.
+ * one's name: with the paired ones' own, every chat the person has.
  */
 export function SpinboxSleepingThreads() {
   const told = useSyncExternalStore(subscribe, snapshot, snapshot);
   const { presentationById } = useEnvironments();
   const router = useRouter();
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- tells the page once that this client lists the chats, which is a message to another window, not React state
-  useEffect(() => window.spinboxEnvironmentsRead?.(), []);
   const sleeping = told.filter((e) => !presentationById.has(e.environmentId as EnvironmentId));
   if (sleeping.length === 0) return null;
   return (
