@@ -27,7 +27,6 @@ export interface SpinboxEnvironment {
 declare global {
   interface Window {
     spinboxEnvironments?: unknown;
-    spinboxEnvironmentsRead?: () => void;
     spinboxPair?: (workspaceId: string) => Promise<string>;
   }
 }
