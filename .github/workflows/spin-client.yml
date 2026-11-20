@@ -1,0 +1,91 @@
+# Spinbox's build of T3 Code's web client. The fork deploys one thing: the client built from the
+# `spin` branch (an upstream release tag with the spin/* branches stacked on it), published as a
+# release of this fork with the same layout as the client/ directory of upstream's CLI archive.
+# The server is upstream's release as it is; Spinbox pins both by hash.
+#
+# A tag v<upstream version>-spin.<n> on `spin` builds and publishes that release. A push of `spin` -
+# the stack rebuilt, on a new tag or with a patch changed - tests and builds it, and publishes nothing.
+name: spin-client
+
+on:
+  push:
+    branches:
+      - spin
+    tags:
+      - "v*-spin.*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: spin-client-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      # A clone of the one commit rather than actions/checkout: .repos/ holds gitlinks with no
+      # .gitmodules entry, and checkout walks submodules even outside a sparse checkout. The fork
+      # is public, so the clone needs no credential.
+      - name: Check out
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          git init -q .
+          git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+          git fetch -q --depth 1 origin "${SHA}"
+          git -c advice.detachedHead=false checkout -q FETCH_HEAD
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: package.json
+
+      # The image's Node no longer ships corepack; the version is the one packageManager names.
+      - name: Install pnpm
+        run: npm install -g "pnpm@$(node -p 'require("./package.json").packageManager.split("@")[1]')"
+
+      # The client and the script that brands it, nothing else of the monorepo.
+      - name: Install
+        run: pnpm install --frozen-lockfile --filter "@t3tools/web..." --filter "@t3tools/scripts..."
+
+      # The patches' own tests: among them, that what they hide is still named upstream - a rename
+      # upstream merges cleanly and shows the renamed thing again. Upstream's tests are upstream's.
+      - name: Test the patches
+        working-directory: apps/web
+        run: pnpm exec vp test run --project unit src/spin
+
+      - name: Build
+        run: |
+          pnpm --filter @t3tools/web build
+          node scripts/apply-web-brand-assets.ts production apps/web/dist
+          rm -rf apps/web/dist/.vite
+          find apps/web/dist -name '*.map' -delete
+
+      - name: Package
+        id: package
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          version="${REF_NAME#v}"
+          name="t3-client-${version}"
+          mkdir -p "out/${name}"
+          cp -a apps/web/dist "out/${name}/client"
+          tar -C out -czf "${name}.tar.gz" "${name}"
+          sha256sum "${name}.tar.gz" | tee "${name}.tar.gz.sha256"
+          echo "name=${name}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF_NAME: ${{ github.ref_name }}
+          NAME: ${{ steps.package.outputs.name }}
+        run: |
+          gh release create "${REF_NAME}" "${NAME}.tar.gz" "${NAME}.tar.gz.sha256" \
+            --repo "${GITHUB_REPOSITORY}" --title "${REF_NAME}" --verify-tag \
+            --notes "T3 Code's web client built from ${GITHUB_SHA} on the spin branch."
