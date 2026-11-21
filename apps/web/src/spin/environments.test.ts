@@ -74,15 +74,17 @@ describe("what a pairing asks", () => {
   });
 });
 
-// Spinbox wakes a workspace only for a pairing, so opening one is what pairs it: one this client
-// has not, and one it saved whose workspace has gone to sleep since.
+// Spinbox wakes a workspace only for a pairing, and refuses this client's own reconnects to one that
+// does not run, so opening one is what pairs it: one this client has not, and one it saved whose
+// workspace is not ready - asleep, still starting, or failed.
 describe("which environment opening pairs", () => {
   const told = (state: string) => readSpinboxEnvironments([{ ...env, state }])[0]!;
   it.each([
     ["one not saved", "ready", false, true],
     ["one saved and asleep", "asleep", true, true],
     ["one saved and running", "ready", true, false],
-    ["one saved and already waking", "waking", true, false],
+    ["one saved and still starting", "waking", true, true],
+    ["one saved that failed", "failed", true, true],
   ])("%s", (_, state, saved, pairs) => {
     expect(wantsPairing(told(state), saved)).toBe(pairs);
   });
@@ -144,23 +146,25 @@ describe("the environment saved for a workspace", () => {
   });
 });
 
-// What the page asks to open is another origin's word: a workspace, at the chat it names or a new
-// one; a chat that is no address is not landed somewhere else.
+// What the page asks to open is another origin's word: a workspace, at the chat its thread id names
+// or a new one; a thread that is no id is not landed somewhere else.
 describe("what the page asks to open", () => {
   it.each([
     [
-      "a chat",
-      { workspaceId: "w1", chat: "/e1/t1" },
-      { to: "chat", environmentId: "e1", threadId: "t1" },
+      "a chat, by its thread id",
+      { workspaceId: "w1", thread: "0b33-7b64_ae5d" },
+      { to: "chat", threadId: "0b33-7b64_ae5d" },
     ],
     ["a new chat, naming none", { workspaceId: "w1" }, { to: "new" }],
-    ["no landing, for a chat that is no address", { workspaceId: "w1", chat: "e1" }, undefined],
+    ["no landing, for a thread that is a path", { workspaceId: "w1", thread: "/e1/t1" }, undefined],
+    ["no landing, for a thread that is empty", { workspaceId: "w1", thread: "" }, undefined],
+    ["no landing, for a thread that is not text", { workspaceId: "w1", thread: 7 }, undefined],
   ])("is %s", (_, told, landing) => {
     expect(readOpening(told)).toEqual({ workspaceId: "w1", landing });
   });
 
   it.each([
-    ["no workspace", { chat: "/e1/t1" }],
+    ["no workspace", { thread: "t1" }],
     ["not an object", "w1"],
   ])("is nothing for %s", (_, told) => {
     expect(readOpening(told)).toBeUndefined();
@@ -209,18 +213,42 @@ describe("opening a Spinbox workspace", () => {
     const told = { ...env, workspaceId: "w1", environmentId: "e1", state: "ready" };
     const window = page([told], async (w) => url(w));
     const { open, land } = opener(savedAt("e1", "https://agents.example/"));
-    await open("w1", { to: "chat", environmentId: "e1", threadId: "t1" });
+    await open("w1", { to: "chat", threadId: "t1" });
     expect(window.spinboxPair).not.toHaveBeenCalled();
-    expect(landed(land)).toEqual([["e1", { to: "chat", environmentId: "e1", threadId: "t1" }]]);
+    expect(landed(land)).toEqual([["e1", { to: "chat", threadId: "t1" }]]);
     expect(window.spinboxOpened.mock.calls).toEqual([["w1"]]);
   });
 
-  it("pairs one saved whose workspace sleeps, which is what wakes it", async () => {
-    const told = { ...env, workspaceId: "w1", environmentId: "e1", state: "asleep" };
+  it("lands on a chat in the environment it paired, which the page need not know", async () => {
+    const window = page([{ ...env, workspaceId: "w1", state: "ready" }], async (w) => url(w));
+    const { open, land } = opener(nothingSaved);
+    await open("w1", { to: "chat", threadId: "t1" });
+    expect(window.spinboxPair).toHaveBeenCalledWith("w1");
+    expect(landed(land)).toEqual([["e1", { to: "chat", threadId: "t1" }]]);
+  });
+
+  it.each([
+    ["sleeps, which is what wakes it", "asleep"],
+    ["is still starting, which the page answers once it runs", "waking"],
+  ])("pairs one saved whose workspace %s", async (_, state) => {
+    const told = { ...env, workspaceId: "w1", environmentId: "e1", state };
     const window = page([told], async (w) => url(w));
-    const { open } = opener(savedAt("e1", "https://agents.example/"));
+    const { open, land } = opener(savedAt("e1", "https://agents.example/"));
     await open("w1", { to: "new" });
     expect(window.spinboxPair).toHaveBeenCalledWith("w1");
+    expect(landed(land)).toEqual([["e1", { to: "new" }]]);
+  });
+
+  it("asks the page for one saved whose workspace failed, and tells it why it did not open", async () => {
+    const told = { ...env, workspaceId: "w1", environmentId: "e1", state: "failed" };
+    const window = page([told], async () => {
+      throw new Error("dev failed: its disk is full.");
+    });
+    const { open, land } = opener(savedAt("e1", "https://agents.example/"));
+    await open("w1", { to: "new" });
+    expect(window.spinboxPair).toHaveBeenCalledWith("w1");
+    expect(land).not.toHaveBeenCalled();
+    expect(window.spinboxOpened.mock.calls).toEqual([["w1", "dev failed: its disk is full."]]);
   });
 
   it("tells the page why it did not open where the page could not pair it", async () => {
@@ -248,14 +276,14 @@ describe("opening a Spinbox workspace", () => {
     const window = page([{ ...env, workspaceId: "w1" }], () => answered);
     const { open, land } = opener(nothingSaved);
     const first = open("w1", { to: "new" });
-    const second = open("w1", { to: "chat", environmentId: "e1", threadId: "t1" });
+    const second = open("w1", { to: "chat", threadId: "t1" });
     const byAddress = open("w1", { to: "here" });
     answer(url("w1"));
     await Promise.all([first, second, byAddress]);
     expect(window.spinboxPair).toHaveBeenCalledTimes(1);
     expect(landed(land)).toEqual([
       ["e1", { to: "new" }],
-      ["e1", { to: "chat", environmentId: "e1", threadId: "t1" }],
+      ["e1", { to: "chat", threadId: "t1" }],
     ]);
     expect(window.spinboxOpened.mock.calls).toEqual([["w1"], ["w1"]]);
   });
