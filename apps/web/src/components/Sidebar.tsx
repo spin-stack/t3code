@@ -85,7 +85,7 @@ import {
   type ReactNode,
 } from "react";
 import { type AnyRouter, useRouter } from "@tanstack/react-router";
-import { SpinboxSleepingThreads } from "../spin/threads";
+import { SpinboxWorkspaces } from "../spin/threads";
 
 import {
   isAtomCommandInterrupted,
@@ -3662,7 +3662,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             </TooltipProvider>
           ) : null}
         </SidebarGroup>
-        <SpinboxSleepingThreads />
+        <SpinboxWorkspaces />
       </SidebarContent>
       <SidebarChromeFooter />
     </SidebarFolderDrop>

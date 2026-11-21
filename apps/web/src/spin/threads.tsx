@@ -1,11 +1,20 @@
-// Chats of workspaces this client has not paired, as Spinbox lists them (window.spinboxEnvironments'
-// threads). Opening one pairs - and so wakes - its workspace (SpinboxPairing).
-import type { EnvironmentId } from "@t3tools/contracts";
-import { MoonIcon } from "lucide-react";
+// The workspaces of the person's that this client has not paired, as Spinbox lists them, each with
+// its chats (window.spinboxEnvironments' threads). Opening a chat there, or a new one, opens the
+// workspace (useOpenSpinboxEnvironment), which pairs - and so wakes - it.
+import { useAtomValue } from "@effect/atom-react";
+import type { EnvironmentCatalogState } from "@t3tools/client-runtime/state/connections";
+import { MoonIcon, SquarePenIcon } from "lucide-react";
 import { useSyncExternalStore } from "react";
-import { useRouter } from "@tanstack/react-router";
 
-import { useEnvironments } from "../state/environments";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/ui/tooltip";
+import { environmentCatalog } from "../connection/catalog";
+import {
+  readSpinboxEnvironment,
+  savedEnvironmentId,
+  type SpinboxEnvironment,
+  type SpinboxEnvironmentState,
+  useOpenSpinboxEnvironment,
+} from "./environments";
 
 /** One chat as Spinbox lists it: what a person sees of it without opening it. */
 export interface SpinboxThread {
@@ -14,67 +23,66 @@ export interface SpinboxThread {
   readonly updatedAt: string;
 }
 
-/** The chats of one environment this client has not paired. */
-export interface SleepingEnvironment {
-  readonly environmentId: string;
-  readonly label: string;
-  /** How its workspace is, in a word, and why where it is not ready. */
-  readonly state: string;
-  readonly why?: string;
+/** A workspace as the list shows it: its environment, and its chats newest first. */
+export interface ListedEnvironment {
+  readonly environment: SpinboxEnvironment;
   readonly threads: ReadonlyArray<SpinboxThread>;
 }
 
 const text = (v: unknown): v is string => typeof v === "string" && v !== "";
 
-/** What a person reads of an environment's state beside its name. */
-const STATE_WORDS: Record<string, string> = {
-  asleep: "Asleep",
-  waking: "Waking",
-  ready: "Ready",
-  failed: "Failed",
+/** What a person reads of a workspace's state beside its name. */
+const STATE_WORDS: Record<SpinboxEnvironmentState, string> = {
+  asleep: "asleep",
+  waking: "waking",
+  ready: "ready",
+  failed: "failed",
 };
 
-/**
- * readSleepingThreads is, from what the page told, each environment with T3's id and chats, its
- * archived ones left out and the rest newest first. Another origin's word: a malformed entry or
- * chat is dropped, not the list.
- */
-export function readSleepingThreads(told: unknown): SleepingEnvironment[] {
+function readThreads(told: unknown): SpinboxThread[] {
   if (!Array.isArray(told)) return [];
-  return told.flatMap((e): SleepingEnvironment[] => {
-    if (typeof e !== "object" || e === null) return [];
-    const r = e as Record<string, unknown>;
-    if (!text(r.environmentId) || !text(r.label) || !Array.isArray(r.threads)) return [];
-    const threads = r.threads
-      .flatMap((t): SpinboxThread[] => {
-        if (typeof t !== "object" || t === null) return [];
-        const c = t as Record<string, unknown>;
-        if (!text(c.id) || typeof c.title !== "string" || !text(c.updatedAt)) return [];
-        if (c.archived === true) return [];
-        return [{ id: c.id, title: c.title, updatedAt: c.updatedAt }];
-      })
-      .toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-    if (threads.length === 0) return [];
-    const state = typeof r.state === "string" && STATE_WORDS[r.state] ? r.state : "asleep";
-    return [
-      {
-        environmentId: r.environmentId,
-        label: r.label,
-        state,
-        ...(text(r.why) ? { why: r.why } : {}),
-        threads,
-      },
-    ];
+  return told
+    .flatMap((t): SpinboxThread[] => {
+      if (typeof t !== "object" || t === null) return [];
+      const c = t as Record<string, unknown>;
+      if (!text(c.id) || typeof c.title !== "string" || !text(c.updatedAt)) return [];
+      if (c.archived === true) return [];
+      return [{ id: c.id, title: c.title, updatedAt: c.updatedAt }];
+    })
+    .toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+/**
+ * readListedEnvironments is, from what the page told, each workspace with its chats, the archived
+ * ones left out. Another origin's word: a malformed entry or chat is dropped, not the list. A chat's
+ * address names T3's id, so a workspace whose agent never ran lists none.
+ */
+export function readListedEnvironments(told: unknown): ListedEnvironment[] {
+  if (!Array.isArray(told)) return [];
+  return told.flatMap((e): ListedEnvironment[] => {
+    const environment = readSpinboxEnvironment(e);
+    if (environment === undefined) return [];
+    const threads =
+      environment.environmentId === "" ? [] : readThreads((e as Record<string, unknown>).threads);
+    return [{ environment, threads }];
   });
 }
 
+/** notPaired is each listed workspace this client has not saved, with chats or none. */
+export function notPaired(
+  listed: ReadonlyArray<ListedEnvironment>,
+  catalog: EnvironmentCatalogState,
+): ListedEnvironment[] {
+  return listed.filter((e) => savedEnvironmentId(catalog, e.environment) === undefined);
+}
+
 let readFrom: unknown;
-let read: SleepingEnvironment[] = [];
-function snapshot(): SleepingEnvironment[] {
+let read: ListedEnvironment[] = [];
+function snapshot(): ListedEnvironment[] {
   const told = typeof window === "undefined" ? undefined : window.spinboxEnvironments;
   if (told !== readFrom) {
     readFrom = told;
-    read = readSleepingThreads(told);
+    read = readListedEnvironments(told);
   }
   return read;
 }
@@ -84,36 +92,60 @@ function subscribe(changed: () => void): () => void {
 }
 
 /**
- * SpinboxSleepingThreads lists the chats of the environments this client has not paired, under each
- * one's name: with the paired ones' own, every chat the person has.
+ * SpinboxWorkspaces lists the workspaces this client has not paired, each under its name and how
+ * it is, with its chats and a new one: with the paired ones' own, every workspace the person has.
  */
-export function SpinboxSleepingThreads() {
-  const told = useSyncExternalStore(subscribe, snapshot, snapshot);
-  const { presentationById } = useEnvironments();
-  const router = useRouter();
-  const sleeping = told.filter((e) => !presentationById.has(e.environmentId as EnvironmentId));
-  if (sleeping.length === 0) return null;
+export function SpinboxWorkspaces() {
+  const listed = useSyncExternalStore(subscribe, snapshot, snapshot);
+  const catalog = useAtomValue(environmentCatalog.catalogValueAtom);
+  const open = useOpenSpinboxEnvironment();
+  const shown = catalog.isReady ? notPaired(listed, catalog) : [];
+  if (shown.length === 0) return null;
   return (
-    <section aria-label="Asleep" className="px-2 pb-2">
-      {sleeping.map((e) => (
-        <div key={e.environmentId} className="pt-3">
-          <h3 className="flex items-center gap-1.5 px-2.5 pb-1 text-xs text-sidebar-muted-foreground">
-            <MoonIcon aria-hidden className="size-3.5 shrink-0" />
-            <span className="truncate">{e.label}</span>
-            <span className="shrink-0">· {STATE_WORDS[e.state]}</span>
-          </h3>
+    <section aria-label="Workspaces" className="px-2 pb-2">
+      {shown.map(({ environment: e, threads }) => (
+        <div key={e.workspaceId} className="pt-3">
+          <div className="flex items-center gap-1.5 px-2.5 pb-1 text-xs text-sidebar-muted-foreground">
+            {e.state === "asleep" ? <MoonIcon aria-hidden className="size-3.5 shrink-0" /> : null}
+            <h3 className="truncate">{e.label}</h3>
+            <span className="shrink-0">
+              · {e.project ? `${e.project} · ` : ""}
+              {STATE_WORDS[e.state]}
+            </span>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    aria-label={`New chat in ${e.label}`}
+                    onClick={() => void open(e.workspaceId, { to: "new" })}
+                    className="ml-auto flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
+                  >
+                    <SquarePenIcon aria-hidden className="size-3.5" />
+                  </button>
+                }
+              />
+              <TooltipPopup side="top">New chat in {e.label}</TooltipPopup>
+            </Tooltip>
+          </div>
           {e.why ? (
             <p className="px-2.5 pb-1 text-xs text-sidebar-muted-foreground">{e.why}</p>
           ) : null}
+          {e.state === "asleep" ? (
+            <p className="px-2.5 pb-1 text-xs text-sidebar-muted-foreground">
+              Opening a chat here wakes it.
+            </p>
+          ) : null}
           <ul>
-            {e.threads.map((t) => (
+            {threads.map((t) => (
               <li key={t.id} className="list-none">
                 <button
                   type="button"
                   onClick={() =>
-                    void router.navigate({
-                      to: "/$environmentId/$threadId",
-                      params: { environmentId: e.environmentId, threadId: t.id },
+                    void open(e.workspaceId, {
+                      to: "chat",
+                      environmentId: e.environmentId,
+                      threadId: t.id,
                     })
                   }
                   className="flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground"

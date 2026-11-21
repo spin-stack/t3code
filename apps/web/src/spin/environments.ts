@@ -56,7 +56,7 @@ const states: ReadonlySet<string> = new Set(["asleep", "waking", "ready", "faile
 const text = (v: unknown): v is string => typeof v === "string";
 
 /** readSpinboxEnvironment is one entry of what the page told, whole, or undefined. */
-function readSpinboxEnvironment(e: unknown): SpinboxEnvironment | undefined {
+export function readSpinboxEnvironment(e: unknown): SpinboxEnvironment | undefined {
   if (typeof e !== "object" || e === null) return undefined;
   const r = e as Record<string, unknown>;
   if (
@@ -287,7 +287,7 @@ async function projectAt(environmentId: EnvironmentId, dir: string) {
 }
 
 /** useOpenSpinboxEnvironment opens a Spinbox workspace at a landing (createSpinboxOpener). */
-function useOpenSpinboxEnvironment() {
+export function useOpenSpinboxEnvironment() {
   const connect = useAtomCommand(connectPairing, { reportFailure: false });
   const router = useRouter();
   const handleNewThread = useNewThreadHandler();
