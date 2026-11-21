@@ -18,6 +18,7 @@ import {
   usePrimaryEnvironmentId,
 } from "~/state/environments";
 import { projectEnvironment } from "~/state/projects";
+import { spinboxFramed } from "~/spin/names";
 import { type NewThreadHandler, useNewThreadHandler } from "./useHandleNewThread";
 
 function reportScratchFailure(title: string, error: unknown) {
@@ -41,6 +42,8 @@ export function createScratchProjectActions(input: {
   readonly handleNewThread: NewThreadHandler;
 }) {
   const scratchWorkspaceRootFor = (environmentId: EnvironmentId | null): string | null => {
+    // Spinbox: a workspace always has its one project, so nothing starts without one.
+    if (spinboxFramed()) return null;
     let environment: ScratchEnvironment | undefined;
     for (const entry of input.environments()) {
       if (entry.environmentId === environmentId) environment = entry;
