@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { buildSpinboxProjectItems, readSpinboxProjects } from "./projects";
+import { buildSpinboxProjectItems, ensuredWorkspace, readSpinboxProjects } from "./projects";
 
 // The projects are another origin's word: a whole entry is taken, one that is not is dropped.
 describe("the projects Spinbox tells", () => {
@@ -44,5 +44,21 @@ describe("a new thread on a Spinbox project", () => {
     ]);
     await rows[1]?.run();
     expect(start).toHaveBeenCalledWith("p2");
+  });
+});
+
+// The workspace the page answers a project with is another origin's word: the one it names is
+// opened, and an answer naming none is refused rather than opening nothing.
+describe("the workspace Spinbox ensures for a project", () => {
+  it("is the one it names", () => {
+    expect(ensuredWorkspace({ workspaceId: "w1", dir: "/workspace/qboot" })).toBe("w1");
+  });
+
+  it.each([
+    ["no workspace", { dir: "/workspace" }],
+    ["an empty one", { workspaceId: "", dir: "/workspace" }],
+    ["nothing", undefined],
+  ])("is refused for an answer with %s", (_, told) => {
+    expect(() => ensuredWorkspace(told)).toThrow(Error);
   });
 });

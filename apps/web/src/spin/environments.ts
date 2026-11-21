@@ -287,7 +287,7 @@ async function projectAt(environmentId: EnvironmentId, dir: string) {
 }
 
 /** useOpenSpinboxEnvironment opens a Spinbox workspace at a landing (createSpinboxOpener). */
-function useOpenSpinboxEnvironment() {
+export function useOpenSpinboxEnvironment() {
   const connect = useAtomCommand(connectPairing, { reportFailure: false });
   const router = useRouter();
   const handleNewThread = useNewThreadHandler();
