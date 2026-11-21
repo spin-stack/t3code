@@ -141,13 +141,7 @@ export function SpinboxWorkspaces() {
               <li key={t.id} className="list-none">
                 <button
                   type="button"
-                  onClick={() =>
-                    void open(e.workspaceId, {
-                      to: "chat",
-                      environmentId: e.environmentId,
-                      threadId: t.id,
-                    })
-                  }
+                  onClick={() => void open(e.workspaceId, { to: "chat", threadId: t.id })}
                   className="flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
                 >
                   <span className="truncate">{t.title || "Untitled thread"}</span>
