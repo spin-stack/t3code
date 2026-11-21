@@ -19,6 +19,7 @@ import {
 import { Button } from "./ui/button";
 import { stackedThreadToast, toastManager } from "./ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
+import { SHOW_UPDATE_NOTICES } from "~/spin/hidden";
 
 // `refreshModels` always drops the server's hour-long latest-version cache. `modelCatalogOnly`
 // drops it only when the model manifest changed.
@@ -124,7 +125,7 @@ export function ProviderUpdatesAction() {
   const { machines, updateAll } = useProviderUpdates();
   const pending = useRef(false);
   const [isPending, setIsPending] = useState(false);
-  if (machines.length === 0 && !isPending) {
+  if (!SHOW_UPDATE_NOTICES || (machines.length === 0 && !isPending)) {
     return null;
   }
 
