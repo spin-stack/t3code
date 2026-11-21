@@ -285,6 +285,7 @@ import { ComposerControlsBar } from "./ComposerControlsBar";
 import { composerCommandKeyHandler } from "./composerCommandKey";
 import { usePromptSuggestion } from "./usePromptSuggestion";
 import { useFreshSessionArmed } from "./freshSessionArms";
+import { SPINBOX_SIGN_IN } from "../../spin/providerLogin";
 
 function consumePasteAsTextShortcut(deadline: { current: number }): boolean {
   const armed = Date.now() <= deadline.current;
@@ -3469,7 +3470,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       theme={resolvedTheme}
                     />
                   ) : showProviderUnavailable ? (
-                    "Enable a provider in Settings"
+                    SPINBOX_SIGN_IN ? (
+                      "Sign in Claude Code or Codex"
+                    ) : (
+                      "Enable a provider in Settings"
+                    )
                   ) : (
                     "Ask anything..."
                   )}
@@ -3654,7 +3659,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                           : projectSelectionRequired
                             ? "Choose a project above to start a thread"
                             : showProviderUnavailable
-                              ? "Enable a provider in Settings to send a message"
+                              ? SPINBOX_SIGN_IN
+                                ? "Sign in Claude Code or Codex to send a message"
+                                : "Enable a provider in Settings to send a message"
                               : (offeredPromptSuggestion ?? DEFAULT_COMPOSER_PLACEHOLDER)
                     }
                     placeholderSuffix={

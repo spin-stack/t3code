@@ -23,6 +23,7 @@ import { cn } from "~/lib/utils";
 import { resolveComposerTraitsInput } from "./composerProviderState";
 import { useApplyThreadModelPick } from "./useApplyThreadModelPick";
 import { useStableCallback } from "../../hooks/useStableCallback";
+import { SPINBOX_SIGN_IN } from "../../spin/providerLogin";
 import {
   ComposerEffortColumn,
   ComposerPickerFooter,
@@ -258,7 +259,11 @@ export function ComposerControlsBar(props: {
       className="shrink-0"
     >
       <CircleAlertIcon className="size-4" />
-      {providerSetupInstanceId ? "Open provider settings" : "No provider available"}
+      {providerSetupInstanceId
+        ? SPINBOX_SIGN_IN
+          ? "Sign in"
+          : "Open provider settings"
+        : "No provider available"}
     </ComposerControl>
   ) : (
     <>
