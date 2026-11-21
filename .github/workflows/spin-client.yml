@@ -59,12 +59,31 @@ jobs:
         working-directory: apps/web
         run: pnpm exec vp test run --project unit src/spin
 
+      # A tag's client says the tag's version. Left to itself the build reads the version from a
+      # tag on the commit, which this one-commit clone does not fetch, and falls back to the
+      # manifest's: upstream's previous release.
       - name: Build
+        env:
+          REF: ${{ github.ref }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
+          case "${REF}" in refs/tags/*) export APP_VERSION="${REF_NAME#v}" ;; esac
           pnpm --filter @t3tools/web build
           node scripts/apply-web-brand-assets.ts production apps/web/dist
           rm -rf apps/web/dist/.vite
           find apps/web/dist -name '*.map' -delete
+
+      # Error reports name the version the client says: a release that says another is pinned by
+      # one version and reported as a different one.
+      - name: Check the client says the tag's version
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if ! grep -rqF -- "${REF_NAME#v}" apps/web/dist; then
+            echo "::error::the client built from ${REF_NAME} does not say it is ${REF_NAME#v}"
+            exit 1
+          fi
 
       - name: Package
         id: package
