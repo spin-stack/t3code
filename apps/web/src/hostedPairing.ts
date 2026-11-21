@@ -2,6 +2,8 @@ import { DEFAULT_HOSTED_APP_URL } from "@t3tools/shared/connectAuth";
 
 import { getPairingTokenFromUrl, setPairingTokenOnUrl } from "@t3tools/shared/remote";
 
+import { SPINBOX_WITHOUT_PRIMARY } from "./spin/noPrimary";
+
 export interface HostedPairingRequest {
   readonly host: string;
   readonly token: string;
@@ -32,6 +34,7 @@ function originFromUrl(value: string): string | null {
 }
 
 export function isHostedStaticApp(url?: URL): boolean {
+  if (SPINBOX_WITHOUT_PRIMARY) return true;
   if (configuredBackendUrl()) {
     return false;
   }
