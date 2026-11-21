@@ -3,6 +3,9 @@ import type { UnifiedSettings } from "@t3tools/contracts";
 import type { Dispatch } from "react";
 import type { ComposerThreadTarget, DraftSessionState } from "../../composerDraftStore";
 import { useStableCallback } from "../../hooks/useStableCallback";
+import { environmentCatalog } from "../../connection/catalog";
+import { appAtomRegistry } from "../../rpc/atomRegistry";
+import { openSpinboxSignIn } from "../../spin/providerLogin";
 import { useApplyThreadModelPick } from "./useApplyThreadModelPick";
 import {
   type EnvironmentId,
@@ -103,6 +106,12 @@ export function useComposerSelection(input: ComposerSelectionInput) {
   const handleRuntimeModeChangeStable = useStableCallback(handleRuntimeModeChange);
 
   const openProviderSetup = (instanceId: ProviderInstanceId) => {
+    // Spinbox: its own sign-in, above this client, signs the workspace's providers in.
+    if (
+      openSpinboxSignIn(appAtomRegistry.get(environmentCatalog.catalogValueAtom), environmentId)
+    ) {
+      return;
+    }
     void navigate({
       to: "/settings/providers",
       search: { environmentId, instanceId },

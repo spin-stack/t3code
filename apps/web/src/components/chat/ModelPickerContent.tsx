@@ -67,6 +67,7 @@ import {
 } from "../../providerInstances";
 import { providerModelKey, sortProviderModelItems } from "../../modelOrdering";
 import { hasRuntimeModelCatalog } from "../../providerModels";
+import { SPINBOX_SIGN_IN } from "../../spin/providerLogin";
 
 type ModelPickerItem = {
   slug: string;
@@ -225,7 +226,11 @@ function ModelPickerProviderNotices({
                   onOpenProviderSetup?.(entry.instanceId);
                 }}
               >
-                {setupEntries.length > 1 ? `Set up ${entry.displayName}` : "Open provider setup"}
+                {SPINBOX_SIGN_IN
+                  ? `Sign in ${entry.displayName}`
+                  : setupEntries.length > 1
+                    ? `Set up ${entry.displayName}`
+                    : "Open provider setup"}
               </InlineButton>
             </div>
           ))}
