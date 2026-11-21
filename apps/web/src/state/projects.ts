@@ -10,10 +10,12 @@ import { parseScopedProjectKey } from "@t3tools/client-runtime/environment";
 import { AVAILABLE_CONNECTION_STATE } from "@t3tools/client-runtime/connection";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { serverEnvironment } from "./server";
+import { withSpinboxTitles } from "../spin/names";
 
 export const environmentProjects = createEnvironmentProjectAtoms({
   catalogValueAtom: environmentCatalog.catalogValueAtom,
-  snapshotAtom: environmentSnapshotAtom,
+  // Spinbox: a workspace's project is titled as Spinbox names it (spin/names).
+  snapshotAtom: withSpinboxTitles(environmentSnapshotAtom, environmentCatalog.catalogValueAtom),
   serverConfigValueAtom: serverEnvironment.configValueAtom,
 });
 export const projectEnvironment = createProjectEnvironmentAtoms(connectionAtomRuntime, {
