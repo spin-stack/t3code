@@ -1,6 +1,7 @@
 // The environments are Spinbox's: every workspace of the person's, told by the dashboard framing this
 // client (window.spinboxEnvironments, "spinbox:environments"). None is added by hand: a workspace is
 // paired when it is opened, through window.spinboxPair, which wakes it and answers the pairing URL.
+// One saved for a workspace the page no longer tells is forgotten.
 import { useAtomValue } from "@effect/atom-react";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentCatalogState } from "@t3tools/client-runtime/state/connections";
@@ -8,7 +9,8 @@ import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime"
 import type { EnvironmentId } from "@t3tools/contracts";
 import { useRouter } from "@tanstack/react-router";
 import * as Option from "effect/Option";
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { AsyncResult } from "effect/reactivity";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { environmentCatalog } from "../connection/catalog";
 import { connectPairing } from "../connection/onboarding";
@@ -185,6 +187,43 @@ export function savedEnvironmentId(
     if (sameBase(profile.httpBaseUrl, environment.httpBaseUrl)) return id;
   }
   return undefined;
+}
+
+/**
+ * Each environment saved at no address of a workspace the page told; undefined before it told a list.
+ * By address, not T3's id: the id is kept in the agent's home, which another workspace may mount, so
+ * one saved for a deleted workspace would pass for that one and block its pairing.
+ */
+function unlistedEnvironmentIds(
+  catalog: EnvironmentCatalogState,
+  told: unknown,
+): EnvironmentId[] | undefined {
+  if (!Array.isArray(told)) return undefined;
+  const addresses = readSpinboxEnvironments(told).map((e) => e.httpBaseUrl);
+  const unlisted: EnvironmentId[] = [];
+  for (const [id, entry] of catalog.entries) {
+    const profile = Option.getOrUndefined(entry.profile);
+    const at = profile?._tag === "BearerConnectionProfile" ? profile.httpBaseUrl : undefined;
+    if (at === undefined || !addresses.some((address) => sameBase(address, at))) unlisted.push(id);
+  }
+  return unlisted;
+}
+
+/**
+ * createSpinboxForgetter forgets for good each environment unlistedEnvironmentIds names, by remove -
+ * the client's own removal, which takes its pairing, credential, what was kept of it and its drafts
+ * with it. One removal per environment at a time; one that failed is asked again on the next change.
+ */
+export function createSpinboxForgetter(remove: (environmentId: EnvironmentId) => Promise<unknown>) {
+  const removing = new Set<EnvironmentId>();
+  return (saved: EnvironmentCatalogState, told: unknown): void => {
+    if (!saved.isReady) return;
+    for (const environmentId of unlistedEnvironmentIds(saved, told) ?? []) {
+      if (removing.has(environmentId)) continue;
+      removing.add(environmentId);
+      void remove(environmentId).finally(() => removing.delete(environmentId));
+    }
+  };
 }
 
 /**
@@ -383,5 +422,29 @@ export function SpinboxOpen() {
     if (window.spinboxOpening !== undefined) take(window.spinboxOpening);
     return () => window.removeEventListener("spinbox:open", heard);
   }, [open]);
+  return null;
+}
+
+const NOTHING_READ: EnvironmentCatalogState = { isReady: false, entries: new Map() };
+const toldList = () => (typeof window === "undefined" ? undefined : window.spinboxEnvironments);
+
+/**
+ * SpinboxForget forgets each environment saved for a workspace the page no longer tells
+ * (createSpinboxForgetter), from the catalog as saved rather than as the client shows it. It draws
+ * nothing.
+ */
+export function SpinboxForget() {
+  const saved = useAtomValue(environmentCatalog.catalogAtom);
+  const told = useSyncExternalStore(subscribe, toldList, toldList);
+  const removeNow = useAtomCommand(environmentCatalog.remove, { reportFailure: false });
+  const remove = useStableCallback(removeNow);
+  const [forget] = useState(() => createSpinboxForgetter(remove));
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- removes from the client's saved environments what the page framing it no longer lists
+  useEffect(() => {
+    forget(
+      AsyncResult.getOrElse(saved, () => NOTHING_READ),
+      told,
+    );
+  }, [forget, saved, told]);
   return null;
 }

@@ -8,6 +8,7 @@ import * as Option from "effect/Option";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import {
+  createSpinboxForgetter,
   createSpinboxOpener,
   pairingInput,
   readOpening,
@@ -143,6 +144,69 @@ describe("the environment saved for a workspace", () => {
     ["nothing", nothingSaved, ""],
   ])("is none where this client saved %s", (_, catalog, environmentId) => {
     expect(savedEnvironmentId(catalog, told(environmentId))).toBeUndefined();
+  });
+});
+
+// What this client saved is a pairing with each workspace the page told: once the page tells a list
+// without one, the workspace is gone or no longer the person's, and so is what was saved for it.
+describe("what this client forgets of what it saved", () => {
+  const w1 = "https://w1.spinbox.invalid";
+  const w2 = "https://w2.spinbox.invalid";
+  const savedEach = (...saved: Array<[string, string]>): EnvironmentCatalogState => ({
+    isReady: true,
+    entries: new Map(saved.flatMap(([id, at]) => [...savedAt(id, `${at}/`).entries])),
+  });
+  const listing = (...workspaces: Array<[string, string, string]>) =>
+    workspaces.map(([workspaceId, httpBaseUrl, environmentId]) => ({
+      ...env,
+      workspaceId,
+      environmentId,
+      httpBaseUrl,
+    }));
+  const forgetter = () => {
+    const remove = vi.fn(async (_: EnvironmentId) => {});
+    return { remove, forget: createSpinboxForgetter(remove) };
+  };
+
+  it.each([
+    ["the one of a workspace the page no longer tells", listing(["w2", w2, ""]), ["e1"]],
+    ["every one, once the page tells the person has none", listing(), ["e1", "e2"]],
+    [
+      "the one with a told id at another address: a home another workspace mounts",
+      listing(["w2", w2, ""], ["w3", "https://w3.spinbox.invalid", "e1"]),
+      ["e1"],
+    ],
+    [
+      "none at a told workspace's address, whatever id is told",
+      listing(["w1", w1, "e9"], ["w2", w2, ""]),
+      [],
+    ],
+    ["none before the page has told a list", undefined, []],
+  ])("forgets %s", (_, told, forgotten) => {
+    const { remove, forget } = forgetter();
+    forget(savedEach(["e1", w1], ["e2", w2]), told);
+    expect(remove.mock.calls.map(([id]) => id)).toEqual(forgotten);
+  });
+
+  it("forgets nothing before it has read what it saved", () => {
+    const { remove, forget } = forgetter();
+    forget({ isReady: false, entries: savedEach(["e1", w1]).entries }, listing());
+    expect(remove).not.toHaveBeenCalled();
+  });
+
+  it("asks once while a removal is out, and again after one that left it saved", async () => {
+    let settle: () => void = () => {};
+    const out = new Promise<void>((resolve) => (settle = resolve));
+    const remove = vi.fn(() => out);
+    const forget = createSpinboxForgetter(remove);
+    const saved = savedEach(["e1", w1]);
+    forget(saved, listing());
+    forget(saved, listing());
+    expect(remove).toHaveBeenCalledTimes(1);
+    settle();
+    await out;
+    forget(saved, listing());
+    expect(remove).toHaveBeenCalledTimes(2);
   });
 });
 
