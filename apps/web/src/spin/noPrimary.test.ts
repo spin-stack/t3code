@@ -1,21 +1,26 @@
-import { describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { AGENTS_FRAME, spinboxWithoutPrimary } from "./noPrimary";
+// Read as the client loads, so each case loads it afresh in the window it is given.
+async function hostedIn(window: object) {
+  vi.stubGlobal("window", window);
+  vi.resetModules();
+  const { isHostedStaticApp } = await import("../hostedPairing");
+  return isHostedStaticApp(new URL("https://agents.spin.example/"));
+}
 
+// Every client Spinbox frames is its Agents page's: no primary, whatever frame it is in, and every
+// environment one Spinbox pairs.
 describe("a client Spinbox frames", () => {
-  it("on the Agents page has no primary", () => {
-    expect(spinboxWithoutPrimary(true, AGENTS_FRAME)).toBe(true);
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.resetModules();
   });
 
-  it("for a workspace is that workspace's, whatever the tab framed before it", () => {
-    expect(spinboxWithoutPrimary(true, "spinbox-workspace")).toBe(false);
+  it("has no primary, whatever its frame is named", async () => {
+    expect(await hostedIn({ spinboxPair: async () => "", name: "" })).toBe(true);
   });
 
-  it("in a frame Spinbox gave no name is not taken for the Agents page", () => {
-    expect(spinboxWithoutPrimary(true, "")).toBe(false);
-  });
-
-  it("is T3 Code's own client when nothing frames it, whatever its window is named", () => {
-    expect(spinboxWithoutPrimary(false, AGENTS_FRAME)).toBe(false);
+  it("is T3 Code's own client, with its primary, when nothing frames it", async () => {
+    expect(await hostedIn({ name: "spinbox-agents" })).toBe(false);
   });
 });
