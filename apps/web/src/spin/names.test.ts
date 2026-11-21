@@ -14,7 +14,12 @@ import { Atom, AtomRegistry } from "effect/reactivity";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { createScratchProjectActions } from "../hooks/useScratchProject";
-import { readSpinboxNames, type SpinboxNames, withSpinboxLabels, withSpinboxTitles } from "./names";
+import {
+  readSpinboxNames,
+  type SpinboxNames,
+  withSpinboxTitles,
+  withSpinboxWorkspaces,
+} from "./names";
 
 const known = EnvironmentId.make("environment-known");
 const fresh = EnvironmentId.make("environment-fresh");
@@ -74,59 +79,102 @@ describe("the names Spinbox tells", () => {
   });
 });
 
-function labelled(catalog: EnvironmentCatalogState, names: ReadonlyArray<SpinboxNames>) {
+function labelled(
+  catalog: EnvironmentCatalogState,
+  names: ReadonlyArray<SpinboxNames> | undefined,
+  framed = true,
+) {
   const registry = AtomRegistry.make();
   const catalogAtom = Atom.make(catalog);
   const namesAtom = Atom.make(names);
-  const atom = withSpinboxLabels(catalogAtom, namesAtom);
+  const atom = withSpinboxWorkspaces(catalogAtom, namesAtom, framed);
   return { registry, catalogAtom, namesAtom, read: () => registry.get(atom) };
 }
 const labels = (catalog: EnvironmentCatalogState) =>
   [...catalog.entries].map(([id, entry]) => [id, entry.target.label]);
+const calmOtter = {
+  ...told,
+  workspaceId: "w2",
+  label: "calm-otter",
+  httpBaseUrl: "https://w2.agents.spin.example",
+};
 
 // Inside Spinbox the environment is the workspace: it reads as the workspace's name wherever the
 // client reads an environment's label, never as the server's "localhost".
 describe("an environment's label inside Spinbox", () => {
-  it("is its workspace's name, found by T3's id or by the address it was paired at", () => {
+  it("is the name of the workspace at the address it was paired at", () => {
     const { read, registry } = labelled(
       catalogOf(
         [known, paired(known, "https://w2.agents.spin.example/")],
         [fresh, paired(fresh, "https://w1.agents.spin.example/")],
-        [laptop, paired(laptop, "https://laptop.example/")],
       ),
-      readSpinboxNames([
-        told,
-        { ...told, workspaceId: "w2", environmentId: known, label: "calm-otter", httpBaseUrl: "x" },
-      ]),
+      readSpinboxNames([told, calmOtter]),
     );
     expect(labels(read())).toEqual([
       [known, "calm-otter"],
       [fresh, "swift-fox"],
-      [laptop, "localhost"],
     ]);
     registry.dispose();
   });
 
   it("is the server's own outside Spinbox", () => {
     const catalog = catalogOf([fresh, paired(fresh, "https://w1.agents.spin.example/")]);
-    const { read, registry } = labelled(catalog, []);
+    const { read, registry } = labelled(catalog, undefined, false);
     expect(read()).toBe(catalog);
     registry.dispose();
   });
 
-  it("leaves the catalog and its entries as they were while no name changes", () => {
-    const laptopEntry = paired(laptop, "https://laptop.example/");
+  it("leaves the catalog and its entries as they were while nothing told changes", () => {
     const catalog = catalogOf(
       [fresh, paired(fresh, "https://w1.agents.spin.example/")],
-      [laptop, laptopEntry],
+      [known, paired(known, "https://w2.agents.spin.example/")],
     );
-    const { read, registry, namesAtom, catalogAtom } = labelled(catalog, readSpinboxNames([told]));
+    const { read, registry, namesAtom, catalogAtom } = labelled(
+      catalog,
+      readSpinboxNames([told, calmOtter]),
+    );
     const first = read();
-    expect(first.entries.get(laptop)).toBe(laptopEntry);
-    registry.set(namesAtom, readSpinboxNames([{ ...told, threads: [] }]));
+    registry.set(namesAtom, readSpinboxNames([{ ...told, threads: [] }, calmOtter]));
     expect(read()).toBe(first);
     registry.set(catalogAtom, { ...catalog });
     expect(read()).toBe(first);
+    registry.dispose();
+  });
+});
+
+// Inside Spinbox the environments are the workspaces the page tells: one saved for a workspace since
+// deleted, or no longer the person's, is neither drawn nor opened in while it waits to be forgotten.
+describe("the environments the client reads inside Spinbox", () => {
+  const catalog = catalogOf(
+    [fresh, paired(fresh, "https://w1.agents.spin.example/")],
+    [known, paired(known, "https://w2.agents.spin.example/")],
+    [laptop, paired(laptop, "https://laptop.example/")],
+  );
+
+  it("are those at a told workspace's address, whatever id its server says", () => {
+    const { read, registry } = labelled(
+      catalog,
+      readSpinboxNames([
+        { ...told, environmentId: known },
+        { ...calmOtter, httpBaseUrl: "https://w3.agents.spin.example" },
+      ]),
+    );
+    expect(read().isReady).toBe(true);
+    expect(labels(read())).toEqual([[fresh, "swift-fox"]]);
+    registry.dispose();
+  });
+
+  it("are none once the page tells the person has none", () => {
+    const { read, registry } = labelled(catalog, []);
+    expect(read()).toEqual({ isReady: true, entries: new Map() });
+    registry.dispose();
+  });
+
+  it("are not read until the page has told its list", () => {
+    const { read, registry, namesAtom } = labelled(catalog, undefined);
+    expect(read()).toEqual({ isReady: false, entries: new Map() });
+    registry.set(namesAtom, readSpinboxNames([told]));
+    expect(labels(read())).toEqual([[fresh, "swift-fox"]]);
     registry.dispose();
   });
 });
@@ -139,7 +187,7 @@ const snapshotOf = (...projects: OrchestrationProjectShell[]) =>
 function titled(
   snapshot: OrchestrationV2ShellSnapshot,
   catalog: EnvironmentCatalogState,
-  names: ReadonlyArray<SpinboxNames>,
+  names: ReadonlyArray<SpinboxNames> | undefined,
 ) {
   const registry = AtomRegistry.make();
   const snapshotAtom = Atom.make<OrchestrationV2ShellSnapshot | null>(snapshot);

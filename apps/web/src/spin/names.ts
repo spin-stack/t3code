@@ -1,6 +1,7 @@
 // Inside Spinbox an environment is a workspace and its project is Spinbox's, so the client names them
 // from what the page tells (window.spinboxEnvironments) rather than after the server's host and the
-// checkout's directory. The names are put in where the catalog and the projects enter the client.
+// checkout's directory, and holds an environment only while the page tells its workspace. The names
+// and the list are put in where the catalog and the projects enter the client.
 import {
   BearerConnectionTarget,
   type ConnectionCatalogEntry,
@@ -23,8 +24,6 @@ declare global {
 
 /** A workspace's names, as Spinbox tells them. */
 export interface SpinboxNames {
-  /** T3's id for its environment, once its server has said it; empty before. */
-  readonly environmentId: string;
   readonly httpBaseUrl: string;
   /** The environment's label: the workspace's name. */
   readonly label: string;
@@ -42,12 +41,10 @@ export function readSpinboxNames(told: unknown): SpinboxNames[] {
   return told.flatMap((e): SpinboxNames[] => {
     if (typeof e !== "object" || e === null) return [];
     const r = e as Record<string, unknown>;
-    if (typeof r.environmentId !== "string" || !text(r.httpBaseUrl) || !text(r.label)) return [];
-    if (!text(r.dir)) return [];
+    if (!text(r.httpBaseUrl) || !text(r.label) || !text(r.dir)) return [];
     const title = text(r.project) ? r.project : r.label;
     return [
       {
-        environmentId: r.environmentId,
         httpBaseUrl: r.httpBaseUrl,
         label: r.label,
         title,
@@ -63,7 +60,6 @@ const sameNames = (a: ReadonlyArray<SpinboxNames>, b: ReadonlyArray<SpinboxNames
     const m = b[i];
     return (
       m !== undefined &&
-      n.environmentId === m.environmentId &&
       n.httpBaseUrl === m.httpBaseUrl &&
       n.label === m.label &&
       n.title === m.title &&
@@ -71,14 +67,17 @@ const sameNames = (a: ReadonlyArray<SpinboxNames>, b: ReadonlyArray<SpinboxNames
     );
   });
 
-/** What Spinbox has told, kept as it tells it again; nothing outside Spinbox. */
-const spinboxNamesAtom = Atom.make((get): ReadonlyArray<SpinboxNames> => {
-  if (typeof window === "undefined") return [];
-  const read = () => readSpinboxNames(window.spinboxEnvironments);
+/** What Spinbox has told, kept as it tells it again; undefined until it tells a list. */
+const spinboxNamesAtom = Atom.make((get): ReadonlyArray<SpinboxNames> | undefined => {
+  if (typeof window === "undefined") return undefined;
+  const read = () =>
+    Array.isArray(window.spinboxEnvironments)
+      ? readSpinboxNames(window.spinboxEnvironments)
+      : undefined;
   const told = () => {
     const next = read();
-    const kept = Option.getOrUndefined(get.self<ReadonlyArray<SpinboxNames>>());
-    if (kept === undefined || !sameNames(kept, next)) get.setSelf(next);
+    const kept = Option.getOrUndefined(get.self<ReadonlyArray<SpinboxNames> | undefined>());
+    if (kept === undefined || next === undefined || !sameNames(kept, next)) get.setSelf(next);
   };
   window.addEventListener("spinbox:environments", told);
   get.addFinalizer(() => window.removeEventListener("spinbox:environments", told));
@@ -99,14 +98,14 @@ function sameBase(a: string, b: string): boolean {
   }
 }
 
-/** The workspace an environment is: by T3's id where Spinbox knows it, else by its address. */
+/**
+ * The workspace an environment is: the one at the address it was paired at. Not by T3's id, which is
+ * kept in the agent's home, and another workspace may mount the home of one deleted.
+ */
 function namesOf(
   told: ReadonlyArray<SpinboxNames>,
-  environmentId: EnvironmentId,
   entry: ConnectionCatalogEntry | undefined,
 ): SpinboxNames | undefined {
-  const byId = told.find((n) => n.environmentId !== "" && n.environmentId === environmentId);
-  if (byId !== undefined) return byId;
   const profile = entry === undefined ? undefined : Option.getOrUndefined(entry.profile);
   if (profile?._tag !== "BearerConnectionProfile") return undefined;
   return told.find((n) => sameBase(n.httpBaseUrl, profile.httpBaseUrl));
@@ -117,10 +116,17 @@ const sameEntries = <K, V>(a: ReadonlyMap<K, V>, b: ReadonlyMap<K, V>) =>
 const sameElements = <T>(a: ReadonlyArray<T>, b: ReadonlyArray<T>) =>
   a.length === b.length && a.every((value, i) => value === b[i]);
 
-/** catalogAtom with each workspace's environment labelled with the workspace's name. */
-export function withSpinboxLabels(
+const UNTOLD: EnvironmentCatalogState = Object.freeze({ isReady: false, entries: new Map() });
+
+/**
+ * catalogAtom as Spinbox tells it: each workspace's environment labelled with the workspace's name,
+ * none of a workspace it does not tell, and not ready until it has told a list - so one deleted is
+ * never drawn nor opened in. spin/environments forgets those left out. Outside Spinbox, catalogAtom.
+ */
+export function withSpinboxWorkspaces(
   catalogAtom: Atom.Atom<EnvironmentCatalogState>,
-  namesAtom: Atom.Atom<ReadonlyArray<SpinboxNames>> = spinboxNamesAtom,
+  namesAtom: Atom.Atom<ReadonlyArray<SpinboxNames> | undefined> = spinboxNamesAtom,
+  framed: boolean = spinboxFramed(),
 ) {
   const labelled = new WeakMap<ConnectionCatalogEntry, ConnectionCatalogEntry>();
   const label = (entry: ConnectionCatalogEntry, target: BearerConnectionTarget, name: string) => {
@@ -137,15 +143,20 @@ export function withSpinboxLabels(
   };
   return Atom.make((get): EnvironmentCatalogState => {
     const catalog = get(catalogAtom);
+    if (!framed) return catalog;
     const told = get(namesAtom);
-    if (told.length === 0) return catalog;
+    if (told === undefined) return UNTOLD;
     let changed = false;
     const entries = new Map<EnvironmentId, ConnectionCatalogEntry>();
     for (const [environmentId, entry] of catalog.entries) {
+      const name = namesOf(told, entry)?.label;
+      if (name === undefined) {
+        changed = true;
+        continue;
+      }
       const target = entry.target;
-      const name = namesOf(told, environmentId, entry)?.label;
       const next =
-        target._tag === "BearerConnectionTarget" && name !== undefined && name !== target.label
+        target._tag === "BearerConnectionTarget" && name !== target.label
           ? label(entry, target, name)
           : entry;
       changed ||= next !== entry;
@@ -155,14 +166,14 @@ export function withSpinboxLabels(
     const kept = Option.getOrUndefined(get.self<EnvironmentCatalogState>());
     if (kept?.isReady === catalog.isReady && sameEntries(kept.entries, entries)) return kept;
     return { isReady: catalog.isReady, entries };
-  }).pipe(Atom.withLabel("spinbox-labelled-environment-catalog"));
+  }).pipe(Atom.withLabel("spinbox-workspaces-environment-catalog"));
 }
 
 /** snapshotAtom with the project of each workspace's dir titled as Spinbox names it. */
 export function withSpinboxTitles(
   snapshotAtom: (environmentId: EnvironmentId) => Atom.Atom<OrchestrationV2ShellSnapshot | null>,
   catalogAtom: Atom.Atom<EnvironmentCatalogState>,
-  namesAtom: Atom.Atom<ReadonlyArray<SpinboxNames>> = spinboxNamesAtom,
+  namesAtom: Atom.Atom<ReadonlyArray<SpinboxNames> | undefined> = spinboxNamesAtom,
 ) {
   const titled = new WeakMap<OrchestrationProjectShell, OrchestrationProjectShell>();
   const title = (project: OrchestrationProjectShell, name: string) => {
@@ -181,8 +192,8 @@ export function withSpinboxTitles(
       const snapshot = get(snapshotAtom(environmentId));
       if (snapshot === null) return null;
       const told = get(namesAtom);
-      if (told.length === 0) return snapshot;
-      const names = namesOf(told, environmentId, get(catalogAtom).entries.get(environmentId));
+      if (told === undefined) return snapshot;
+      const names = namesOf(told, get(catalogAtom).entries.get(environmentId));
       if (names === undefined) return snapshot;
       const projects = snapshot.projects.map((p) =>
         p.workspaceRoot === names.dir && p.title !== names.title ? title(p, names.title) : p,
