@@ -39,7 +39,7 @@ export interface SpinboxEnvironment {
 
 /** Where opening a workspace lands: one of its chats, a new chat in its project, or where it is. */
 type SpinboxLanding =
-  | { readonly to: "chat"; readonly environmentId: string; readonly threadId: string }
+  | { readonly to: "chat"; readonly threadId: string }
   | { readonly to: "new" }
   | { readonly to: "here" };
 
@@ -198,9 +198,11 @@ export function wantsPairing(wanted: SpinboxEnvironment | undefined, saved: bool
   return !saved || wanted.state !== "ready";
 }
 
+const threadIdPattern = /^[A-Za-z0-9_-]+$/;
+
 /**
- * readOpening is what the page asked to open: the workspace, and the chat it named or a new one.
- * undefined where it named no workspace; a landing of undefined where the chat is not an address.
+ * readOpening is what the page asked to open: the workspace, and the chat its thread id names or a
+ * new one. undefined where it named no workspace; a landing of undefined where the thread is no id.
  */
 export function readOpening(
   told: unknown,
@@ -208,11 +210,13 @@ export function readOpening(
   if (typeof told !== "object" || told === null) return undefined;
   const r = told as Record<string, unknown>;
   if (!text(r.workspaceId) || r.workspaceId === "") return undefined;
-  if (r.chat === undefined) return { workspaceId: r.workspaceId, landing: { to: "new" } };
-  const chat = text(r.chat) ? /^\/([^/]+)\/([^/]+)$/.exec(r.chat) : null;
+  if (r.thread === undefined) return { workspaceId: r.workspaceId, landing: { to: "new" } };
   return {
     workspaceId: r.workspaceId,
-    landing: chat ? { to: "chat", environmentId: chat[1]!, threadId: chat[2]! } : undefined,
+    landing:
+      text(r.thread) && threadIdPattern.test(r.thread)
+        ? { to: "chat", threadId: r.thread }
+        : undefined,
   };
 }
 
@@ -310,7 +314,7 @@ function useOpenSpinboxEnvironment() {
       if (landing.to === "chat") {
         await router.navigate({
           to: "/$environmentId/$threadId",
-          params: { environmentId: landing.environmentId, threadId: landing.threadId },
+          params: { environmentId, threadId: landing.threadId },
         });
       } else if (landing.to === "new") {
         const project = await projectAt(environmentId, environment.dir);
@@ -369,7 +373,7 @@ export function SpinboxOpen() {
       const asked = readOpening(told);
       if (asked === undefined) return;
       if (asked.landing === undefined) {
-        window.spinboxOpened?.(asked.workspaceId, "The chat asked for is not a chat's address.");
+        window.spinboxOpened?.(asked.workspaceId, "The chat asked for is not a thread id.");
         return;
       }
       void open(asked.workspaceId, asked.landing);
