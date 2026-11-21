@@ -74,15 +74,17 @@ describe("what a pairing asks", () => {
   });
 });
 
-// Spinbox wakes a workspace only for a pairing, so opening one is what pairs it: one this client
-// has not, and one it saved whose workspace has gone to sleep since.
+// Spinbox wakes a workspace only for a pairing, and refuses this client's own reconnects to one that
+// does not run, so opening one is what pairs it: one this client has not, and one it saved whose
+// workspace is not ready - asleep, still starting, or failed.
 describe("which environment opening pairs", () => {
   const told = (state: string) => readSpinboxEnvironments([{ ...env, state }])[0]!;
   it.each([
     ["one not saved", "ready", false, true],
     ["one saved and asleep", "asleep", true, true],
     ["one saved and running", "ready", true, false],
-    ["one saved and already waking", "waking", true, false],
+    ["one saved and still starting", "waking", true, true],
+    ["one saved that failed", "failed", true, true],
   ])("%s", (_, state, saved, pairs) => {
     expect(wantsPairing(told(state), saved)).toBe(pairs);
   });
@@ -215,12 +217,28 @@ describe("opening a Spinbox workspace", () => {
     expect(window.spinboxOpened.mock.calls).toEqual([["w1"]]);
   });
 
-  it("pairs one saved whose workspace sleeps, which is what wakes it", async () => {
-    const told = { ...env, workspaceId: "w1", environmentId: "e1", state: "asleep" };
+  it.each([
+    ["sleeps, which is what wakes it", "asleep"],
+    ["is still starting, which the page answers once it runs", "waking"],
+  ])("pairs one saved whose workspace %s", async (_, state) => {
+    const told = { ...env, workspaceId: "w1", environmentId: "e1", state };
     const window = page([told], async (w) => url(w));
-    const { open } = opener(savedAt("e1", "https://agents.example/"));
+    const { open, land } = opener(savedAt("e1", "https://agents.example/"));
     await open("w1", { to: "new" });
     expect(window.spinboxPair).toHaveBeenCalledWith("w1");
+    expect(landed(land)).toEqual([["e1", { to: "new" }]]);
+  });
+
+  it("asks the page for one saved whose workspace failed, and tells it why it did not open", async () => {
+    const told = { ...env, workspaceId: "w1", environmentId: "e1", state: "failed" };
+    const window = page([told], async () => {
+      throw new Error("dev failed: its disk is full.");
+    });
+    const { open, land } = opener(savedAt("e1", "https://agents.example/"));
+    await open("w1", { to: "new" });
+    expect(window.spinboxPair).toHaveBeenCalledWith("w1");
+    expect(land).not.toHaveBeenCalled();
+    expect(window.spinboxOpened.mock.calls).toEqual([["w1", "dev failed: its disk is full."]]);
   });
 
   it("tells the page why it did not open where the page could not pair it", async () => {

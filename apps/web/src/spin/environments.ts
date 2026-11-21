@@ -8,7 +8,7 @@ import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime"
 import type { EnvironmentId } from "@t3tools/contracts";
 import { useRouter } from "@tanstack/react-router";
 import * as Option from "effect/Option";
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 
 import { environmentCatalog } from "../connection/catalog";
 import { connectPairing } from "../connection/onboarding";
@@ -189,13 +189,13 @@ export function savedEnvironmentId(
 
 /**
  * wantsPairing is whether opening this environment pairs it: one this client has not, or one it
- * has whose workspace sleeps. Spinbox wakes a workspace for a pairing and for nothing else - this
- * client reconnecting to what it saved, on every load and focus, would wake each one it ever
- * opened - so opening a sleeping one is what pairs it again.
+ * has whose workspace is not ready. Spinbox wakes a workspace only for a pairing and refuses this
+ * client's own reconnects while it does not run; the page wakes one asleep, answers one starting
+ * once it runs, and says why one failed.
  */
 export function wantsPairing(wanted: SpinboxEnvironment | undefined, saved: boolean): boolean {
   if (wanted === undefined) return false;
-  return !saved || wanted.state === "asleep";
+  return !saved || wanted.state !== "ready";
 }
 
 /**
@@ -227,7 +227,7 @@ const opening = new Map<string, Promise<Opened>>();
 
 /**
  * createSpinboxOpener opens Spinbox workspaces: each paired where this client has not saved it or
- * it sleeps, then the landing shown, and the page told how it went (window.spinboxOpened).
+ * it is not ready, then the landing shown, and the page told how it went (window.spinboxOpened).
  */
 export function createSpinboxOpener(deps: {
   /** The saved environments, once this client has read them. */
@@ -334,11 +334,22 @@ export function SpinboxPairing({ environmentId }: { environmentId: string | unde
   const wanted = environments.find(
     (e) => e.environmentId !== "" && e.environmentId === environmentId,
   );
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- a pairing with another workspace's server, started once while this chat's address names it
+  // The workspace and state it last paired for: every telling renders this again, and a workspace
+  // that failed is still failed once the page refused its pairing.
+  const asked = useRef<string | undefined>(undefined);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- a pairing with another workspace's server, started once per state it is told in while this chat's address names it
   useEffect(() => {
-    if (!inSpinbox() || !catalog.isReady || !wanted) return;
-    if (!wantsPairing(wanted, savedEnvironmentId(catalog, wanted) !== undefined)) return;
-    void open(wanted.workspaceId, HERE);
+    const pair =
+      inSpinbox() &&
+      catalog.isReady &&
+      wanted !== undefined &&
+      wantsPairing(wanted, savedEnvironmentId(catalog, wanted) !== undefined)
+        ? wanted
+        : undefined;
+    const ask = pair && `${pair.workspaceId} ${pair.state}`;
+    if (ask === asked.current) return;
+    asked.current = ask;
+    if (pair) void open(pair.workspaceId, HERE);
   });
   return null;
 }
