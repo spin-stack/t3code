@@ -189,8 +189,19 @@ export function savedEnvironmentId(
   return undefined;
 }
 
+/** Whether an address is one the page gives a workspace: <workspace>.spinbox.invalid. */
+function isPageAddress(httpBaseUrl: string): boolean {
+  try {
+    return new URL(httpBaseUrl).hostname.endsWith(".spinbox.invalid");
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Each environment saved at no address of a workspace the page told; undefined before it told a list.
+ * Each environment saved at a page address (<workspace>.spinbox.invalid) no workspace the page told
+ * has; undefined before it told a list. Only the page's own addresses: it can say a workspace of
+ * its own is gone, never that an entry it did not make is not wanted.
  * By address, not T3's id: the id is kept in the agent's home, which another workspace may mount, so
  * one saved for a deleted workspace would pass for that one and block its pairing.
  */
@@ -204,7 +215,8 @@ function unlistedEnvironmentIds(
   for (const [id, entry] of catalog.entries) {
     const profile = Option.getOrUndefined(entry.profile);
     const at = profile?._tag === "BearerConnectionProfile" ? profile.httpBaseUrl : undefined;
-    if (at === undefined || !addresses.some((address) => sameBase(address, at))) unlisted.push(id);
+    if (at === undefined || !isPageAddress(at)) continue;
+    if (!addresses.some((address) => sameBase(address, at))) unlisted.push(id);
   }
   return unlisted;
 }

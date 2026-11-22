@@ -188,6 +188,12 @@ describe("what this client forgets of what it saved", () => {
     expect(remove.mock.calls.map(([id]) => id)).toEqual(forgotten);
   });
 
+  it("leaves an entry at an address the page does not give, whatever it tells", () => {
+    const { remove, forget } = forgetter();
+    forget(savedEach(["e1", w1], ["e3", "https://saved.example.com"]), listing());
+    expect(remove.mock.calls.map(([id]) => id)).toEqual(["e1"]);
+  });
+
   it("forgets nothing before it has read what it saved", () => {
     const { remove, forget } = forgetter();
     forget({ isReady: false, entries: savedEach(["e1", w1]).entries }, listing());
